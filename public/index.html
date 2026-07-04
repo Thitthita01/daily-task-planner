@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Task Planner</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <style>
+        .fc { --fc-border-color: #334155; --fc-page-bg-color: #1e293b; }
+        .fc .fc-col-header-cell-cushion { color: #94a3b8; font-size: 0.875rem; font-weight: 500; text-transform: uppercase; padding: 10px 0; }
+        .fc .fc-daygrid-day-number { color: #cbd5e1; font-weight: 500; padding: 8px; }
+        .fc-theme-standard td, .fc-theme-standard th { border: 1px solid #334155 !important; }
+        .fc .fc-button-primary { background-color: #3b82f6; border-color: #3b82f6; font-weight: 500; color: #ffffff; }
+        .fc .fc-button-primary:hover { background-color: #2563eb; }
+        .fc .fc-icon { color: #ffffff !important; font-weight: bold; }
+        .fc .fc-button .fc-icon { vertical-align: middle; }
+
+        .event-pending { background-color: #ef4444 !important; color: #ffffff !important; border-left: 4px solid #b91c1c !important; border-radius: 4px; padding: 2px 6px; }
+        .event-doing { background-color: #eab308 !important; color: #1e293b !important; font-weight: 600 !important; border-radius: 4px; padding: 2px 6px; }
+        .event-done { background-color: #10b981 !important; color: #ffffff !important; text-decoration: line-through !important; opacity: 0.6; border-radius: 4px; padding: 2px 6px; }
+
+        /* ปรับแต่งไอคอนรูปปฏิทินให้เป็นสีฟ้าสว่าง */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(53%) sepia(93%) saturate(1474%) hue-rotate(185deg) brightness(103%) contrast(101%);
+            cursor: pointer;
+        }
+
+        /* ปรับแต่งปุ่มลูกศรของ select ให้เป็นสีฟ้าสว่าง */
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2338bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 16px;
+            padding-right: 40px !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <!-- Login Section -->
+    <div id="login-section" class="flex flex-col items-center justify-center min-h-screen px-4">
+        <div class="bg-slate-800 p-8 rounded-xl shadow-lg w-full max-w-md border border-slate-700">
+            <h2 class="text-2xl font-bold mb-6 text-center text-blue-400">Daily Task Planner Login</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                    <input type="text" id="username" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none">
+                </div>
+                <div>
+                   <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="password" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none">
+                </div>
+                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold p-2.5 rounded-lg transition">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Section -->
+    <div id="main-section" class="hidden max-w-7xl mx-auto p-4 md:p-6">
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-700 pb-4 mb-6 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-100">Work Calendar</h1>
+                <p class="text-sm text-slate-400 mt-0.5">ผู้ใช้งานปัจจุบัน: <span id="display-username" class="text-slate-200 font-semibold"></span> (<span id="display-role" class="text-slate-400"></span>)</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <!-- เมนูสลับหน้าสำหรับเลือกดู ปฏิทิน หรือ ประวัติย้อนหลัง -->
+                <nav class="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                    <button onclick="switchTab('calendar-view')" id="tab-calendar-view" class="bg-blue-500 text-white px-4 py-1.5 rounded-md text-sm font-medium transition">ปฏิทินงาน</button>
+                    <button onclick="switchTab('history-view')" id="tab-history-view" class="text-slate-400 hover:text-slate-200 px-4 py-1.5 rounded-md text-sm font-medium transition">ประวัติย้อนหลัง</button>
+                </nav>
+                <button onclick="logout()" class="bg-rose-600 hover:bg-rose-700 px-4 py-2 rounded-lg text-sm font-medium transition">ออกจากระบบ</button>
+            </div>
+        </header>
+
+        <!-- Admin Controls (แสดงทั้งสองหน้าเมื่อสิทธิ์เป็น admin) -->
+        <div id="admin-controls" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
+            <label class="block text-sm font-medium text-amber-400 mb-2">ตัวเลือกผู้ดูแลระบบ (Admin View - ดูงานพนักงาน)</label>
+            <select id="admin-filter-user" onchange="loadTasks()" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none">
+                <option value="">-- แสดงงานของพนักงานทุกคน --</option>
+                <option value="1">somchai (Employee)</option>
+                <option value="2">somsri (Employee)</option>
+            </select>
+        </div>
+
+        <!-- ================= แท็บที่ 1: หน้าจอแสดงปฏิทินงานหลัก ================= -->
+        <div id="calendar-view" class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Form Block -->
+            <div id="task-form-container" class="bg-slate-800 p-5 rounded-xl border border-slate-700 h-fit">
+                <h3 id="form-action-title" class="text-lg font-bold mb-4 text-blue-400">สร้างงานใหม่</h3>
+                <form id="task-form" class="space-y-4">
+                    <input type="hidden" id="edit-task-id">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">หัวข้อ / ชื่องาน</label>
+                        <input type="text" id="task-title" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">รายละเอียดงาน</label>
+                        <textarea id="task-desc" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none" rows="3"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">วันที่เริ่มต้น</label>
+                            <input type="date" id="task-date-start" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">วันที่สิ้นสุด</label>
+                            <input type="date" id="task-date-end" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" id="submit-btn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold p-2 rounded-lg text-sm transition">บันทึกข้อมูล</button>
+                        <button type="button" id="cancel-edit-btn" onclick="resetTaskForm()" class="hidden bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-lg text-sm transition">ยกเลิก</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Calendar Block -->
+            <div id="calendar-container" class="lg:col-span-3 bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <div class="flex flex-wrap gap-4 mb-4 text-xs font-medium bg-slate-900/50 p-3 rounded-lg border border-slate-700/60 w-fit">
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-500"></span>รอดำเนินการ (Pending)</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-yellow-500"></span>กำลังทำ (Doing)</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500"></span>เสร็จสิ้น (Done)</div>
+                </div>
+                <div id="calendar"></div>
+            </div>
+        </div>
+
+        <!-- ================= แท็บที่ 2: หน้าประวัติรายการงานย้อนหลัง (Task History) ================= -->
+        <div id="history-view" class="hidden bg-slate-800 p-6 rounded-xl border border-slate-700">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                <h2 class="text-xl font-bold text-blue-400">ประวัติและรายการงานย้อนหลังทั้งหมด</h2>
+                
+                <div class="flex flex-wrap gap-2">
+                    <!-- ค้นหาชื่องานย้อนหลัง -->
+                    <input type="text" id="history-search" oninput="renderHistoryTable()" placeholder="🔍 ค้นหาชื่องาน..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none w-48">
+                    
+                    <!-- ตัวกรองสถานะงานย้อนหลัง -->
+                    <select id="history-filter-status" onchange="renderHistoryTable()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none">
+                        <option value="">-- ทุกสถานะงาน --</option>
+                        <option value="pending">รอดำเนินการ (Pending)</option>
+                        <option value="doing">กำลังทำ (Doing)</option>
+                        <option value="done">เสร็จสิ้น (Done)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- ตารางประวัติงานย้อนหลัง -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-700 text-slate-400 font-medium">
+                            <th class="p-3">เจ้าของงาน</th>
+                            <th class="p-3">หัวข้อ / ชื่องาน</th>
+                            <th class="p-3">รายละเอียดงาน</th>
+                            <th class="p-3">วันที่เริ่ม - สิ้นสุด</th>
+                            <th class="p-3 text-center">สถานะ</th>
+                            <th class="p-3 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body" class="divide-y divide-slate-700/50">
+                        <!-- รายการงานจะถูกวาดลงตรงนี้จาก JavaScript -->
+                    </tbody>
+                </table>
+                <div id="history-empty-msg" class="hidden text-center text-slate-500 italic py-8">ไม่พบประวัติข้อมูลงานในระบบ</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Admin View Modal -->
+    <div id="admin-action-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-xl shadow-2xl p-6">
+            <h3 class="text-lg font-bold text-amber-400 mb-2">รายการงานในระบบ</h3>
+            <p class="text-xs text-slate-400 mb-4">วันที่เลือก: <span id="selected-modal-date" class="text-slate-200 font-mono"></span></p>
+
+            <div class="flex flex-col gap-2">
+                <label class="text-xs font-medium text-slate-400 uppercase">รายชื่อรายการงานในวันนี้</label>
+                <div id="modal-day-tasks" class="max-h-40 overflow-y-auto space-y-1.5 my-1"></div>
+            </div>
+            <button onclick="closeAdminModal()" class="w-full mt-4 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs py-2 rounded-lg transition">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+
+    <!-- Employee Status Update Modal -->
+    <div id="employee-status-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-xl shadow-2xl p-6">
+            <h3 id="employee-modal-title" class="text-lg font-bold text-blue-400 mb-2">อัปเดตสถานะงาน</h3>
+            <p id="employee-modal-task-title" class="text-sm text-slate-300 font-semibold truncate mb-1"></p>
+            <p id="employee-modal-task-desc" class="text-xs text-slate-400 bg-slate-900 p-2 rounded border border-slate-700/50 mb-4 max-h-24 overflow-y-auto italic whitespace-pre-wrap"></p>
+            
+            <form id="employee-status-form" onsubmit="saveEmployeeStatus(event)">
+                <input type="hidden" id="employee-modal-task-id">
+                
+                <div id="employee-dropdown-block" class="mb-4">
+                    <label class="block text-xs font-medium text-slate-400 mb-1 uppercase">เลือกสถานะงาน</label>
+                    <select id="employee-modal-status" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none">
+                        <option value="pending">รอดำเนินการ (Pending)</option>
+                        <option value="doing">กำลังทำ (Doing)</option>
+                        <option value="done">เสร็จสิ้น (Done)</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button type="submit" id="employee-modal-save-btn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm transition">บันทึกสถานะ</button>
+                    <button type="button" onclick="closeEmployeeModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 rounded-lg text-sm transition">ยกเลิก</button>
+                </div>
+                <button type="button" id="employee-modal-delete-btn" onclick="triggerEmployeeDelete()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-medium py-2 rounded-lg text-xs transition mt-2">ลบงานชิ้นนี้</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let calendar = null;
+        let globalActiveEvents = [];
+        let currentSelectedDateStr = "";
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                currentUser = data.user;
+                showDashboard();
+            } else {
+                alert(data.error);
+            }
+        });
+
+        function showDashboard() {
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('main-section').classList.remove('hidden');
+            document.getElementById('display-username').innerText = currentUser.username;
+            document.getElementById('display-role').innerText = currentUser.role;
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('task-date-start').value = todayStr;
+            document.getElementById('task-date-end').value = todayStr;
+
+            const formContainer = document.getElementById('task-form-container');
+            const calendarContainer = document.getElementById('calendar-container');
+
+            if (currentUser.role === 'admin') {
+                document.getElementById('admin-controls').classList.remove('hidden');
+                formContainer.classList.add('hidden');
+                calendarContainer.className = "lg:col-span-4 bg-slate-800 p-5 rounded-xl border border-slate-700";
+            } else {
+                document.getElementById('admin-controls').classList.add('hidden');
+                formContainer.classList.remove('hidden');
+                calendarContainer.className = "lg:col-span-3 bg-slate-800 p-5 rounded-xl border border-slate-700";
+            }
+
+            switchTab('calendar-view'); // เริ่มต้นที่หน้าปฏิทินเสมอ
+            initCalendar();
+        }
+
+        // ฟังก์ชันสลับการแสดงผลหน้า ปฏิทิน / หน้าประวัติงานย้อนหลัง
+        function switchTab(tabId) {
+            if (tabId === 'calendar-view') {
+                document.getElementById('calendar-view').classList.remove('hidden');
+                document.getElementById('history-view').classList.add('hidden');
+                document.getElementById('tab-calendar-view').className = "bg-blue-500 text-white px-4 py-1.5 rounded-md text-sm font-medium transition";
+                document.getElementById('tab-history-view').className = "text-slate-400 hover:text-slate-200 px-4 py-1.5 rounded-md text-sm font-medium transition";
+                if (calendar) calendar.render(); // สั่งให้ปฏิทินวาดขนาดใหม่ให้พอดีจอ
+            } else {
+                document.getElementById('calendar-view').classList.add('hidden');
+                document.getElementById('history-view').classList.remove('hidden');
+                document.getElementById('tab-calendar-view').className = "text-slate-400 hover:text-slate-200 px-4 py-1.5 rounded-md text-sm font-medium transition";
+                document.getElementById('tab-history-view').className = "bg-blue-500 text-white px-4 py-1.5 rounded-md text-sm font-medium transition";
+                renderHistoryTable(); // ดึงข้อมูลและวาดตารางประวัติย้อนหลัง
+            }
+        }
+
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'th',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: '' 
+                },
+                height: 620,
+                dateClick: function(info) {
+                    if (currentUser.role === 'admin') {
+                        openAdminModal(info.dateStr);
+                    }
+                },
+                eventClick: function(info) {
+                    handleEventClick(info.event);
+                }
+            });
+            calendar.render();
+            loadTasks();
+        }
+
+        async function loadTasks() {
+            let url = `/api/tasks?user_id=${currentUser.id}&role=${currentUser.role}`;
+            if (currentUser.role === 'admin') {
+                const targetUserId = document.getElementById('admin-filter-user').value;
+                if (targetUserId) url += `&target_user_id=${targetUserId}`;
+            }
+
+            const res = await fetch(url);
+            globalActiveEvents = await res.json();
+
+            // รีเฟรชข้อมูลทั้งบนปฏิทินและในตารางประวัติย้อนหลัง
+            refreshCalendarEvents();
+            if (!document.getElementById('history-view').classList.contains('hidden')) {
+                renderHistoryTable();
+            }
+        }
+
+        function refreshCalendarEvents() {
+            calendar.removeAllEvents();
+            globalActiveEvents.forEach(task => {
+                let className = 'event-pending';
+                if (task.status === 'doing') className = 'event-doing';
+                if (task.status === 'done') className = 'event-done';
+
+                let endDate = new Date(task.end_date);
+                endDate.setDate(endDate.getDate() + 1);
+                let endDateStr = endDate.toISOString().split('T')[0];
+
+                calendar.addEvent({
+                    id: task.id,
+                    title: `${task.username ? '['+task.username+'] ' : ''}${task.title}`,
+                    start: task.task_date,
+                    end: endDateStr,
+                    allDay: true,
+                    className: className,
+                    extendedProps: { description: task.description, status: task.status, user_id: task.user_id, raw_end_date: task.end_date }
+                });
+            });
+        }
+
+        // ฟังก์ชันวาดตารางประวัติย้อนหลัง พร้อมระบบค้นหาและฟิลเตอร์สถานะ
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-table-body');
+            const searchVal = document.getElementById('history-search').value.toLowerCase();
+            const filterStatus = document.getElementById('history-filter-status').value;
+            tbody.innerHTML = "";
+
+            // กรองข้อมูลตามที่ผู้ใช้งานพิมพ์ค้นหาหรือเลือกฟิลเตอร์
+            const filteredTasks = globalActiveEvents.filter(task => {
+                const matchesSearch = task.title.toLowerCase().includes(searchVal) || (task.description && task.description.toLowerCase().includes(searchVal));
+                const matchesStatus = filterStatus === "" || task.status === filterStatus;
+                return matchesSearch && matchesStatus;
+            });
+
+            if (filteredTasks.length === 0) {
+                document.getElementById('history-empty-msg').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('history-empty-msg').classList.add('hidden');
+
+            filteredTasks.forEach(task => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-700/40 hover:bg-slate-700/20 transition text-slate-300";
+
+                let statusBadge = `<span class="bg-red-500/10 text-red-400 border border-red-500/20 text-xs px-2 py-0.5 rounded-full">รอดำเนินการ</span>`;
+                if (task.status === 'doing') statusBadge = `<span class="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-xs px-2 py-0.5 rounded-full">กำลังทำ</span>`;
+                if (task.status === 'done') statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs px-2 py-0.5 rounded-full">เสร็จสิ้น</span>`;
+
+                // แอดมินดูได้อย่างเดียว พนักงานแก้ไขได้เฉพาะงานของตัวเอง
+                const actionBtn = (currentUser.role === 'admin') 
+                    ? `<button onclick="openHistoryReadOnly(${task.id})" class="text-amber-400 hover:underline text-xs">ดูข้อมูล</button>`
+                    : `<button onclick="openHistoryManage(${task.id})" class="text-blue-400 hover:underline text-xs">จัดการงาน</button>`;
+
+                tr.innerHTML = `
+                    <td class="p-3 font-medium text-slate-400">${task.username || currentUser.username}</td>
+                    <td class="p-3 font-semibold text-slate-200">${task.title}</td>
+                    <td class="p-3 max-w-xs truncate text-slate-400">${task.description || '-'}</td>
+                    <td class="p-3 text-xs font-mono text-slate-400">${task.task_date} ถึง ${task.end_date}</td>
+                    <td class="p-3 text-center">${statusBadge}</td>
+                    <td class="p-3 text-center">${actionBtn}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ฟังก์ชันช่วยเรียกเปิดหน้าต่างจัดการจากตารางย้อนหลัง
+        function openHistoryReadOnly(taskId) {
+            const event = calendar.getEventById(taskId);
+            if (event) openReadOnlyModal(event);
+        }
+
+        function openHistoryManage(taskId) {
+            const event = calendar.getEventById(taskId);
+            if (event) handleEventClick(event);
+        }
+
+        function handleEventClick(event) {
+            const taskOwnerId = event.extendedProps.user_id;
+
+            if (currentUser.role === 'admin') {
+                openReadOnlyModal(event);
+            } else {
+                if (taskOwnerId != currentUser.id) {
+                    alert('คุณไม่มีสิทธิ์เข้าถึงหรือแก้ไขสถานะของงานนี้');
+                } else {
+                    employeeManageStatus(event);
+                }
+            }
+        }
+
+        document.getElementById('task-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-task-id').value;
+            const title = document.getElementById('task-title').value;
+            const description = document.getElementById('task-desc').value;
+            const task_date = document.getElementById('task-date-start').value;
+            const end_date = document.getElementById('task-date-end').value;
+            const user_id = currentUser.id;
+
+            let res;
+            if (id) {
+                res = await fetch(`/api/tasks/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, description, task_date, end_date, user_id })
+                });
+            } else {
+                res = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id, title, description, task_date, end_date })
+                });
+            }
+
+            if (res.ok) {
+                resetTaskForm();
+                loadTasks();
+            } else {
+                alert('เกิดข้อผิดพลาด ไม่สามารถบันทึกข้อมูลได้');
+            }
+        });
+
+        function openReadOnlyModal(event) {
+            document.getElementById('employee-modal-title').innerText = "รายละเอียดงาน (ดูอย่างเดียว)";
+            document.getElementById('employee-modal-title').className = "text-lg font-bold text-amber-500 mb-2";
+            document.getElementById('employee-modal-task-id').value = "";
+            document.getElementById('employee-modal-task-title').innerText = event.title;
+            document.getElementById('employee-modal-task-desc').innerText = event.extendedProps.description || 'ไม่มีรายละเอียด';
+            
+            document.getElementById('employee-dropdown-block').classList.add('hidden');
+            document.getElementById('employee-modal-save-btn').classList.add('hidden');
+            document.getElementById('employee-modal-delete-btn').classList.add('hidden');
+            
+            document.getElementById('employee-status-modal').classList.remove('hidden');
+        }
+
+        function openAdminModal(dateStr) {
+            currentSelectedDateStr = dateStr;
+            document.getElementById('selected-modal-date').innerText = dateStr;
+            const taskContainer = document.getElementById('modal-day-tasks');
+            taskContainer.innerHTML = "";
+
+            const targetDate = new Date(dateStr);
+            const dayTasks = globalActiveEvents.filter(t => {
+                const start = new Date(t.task_date);
+                const end = new Date(t.end_date);
+                return targetDate >= start && targetDate <= end;
+            });
+
+            if (dayTasks.length === 0) {
+                taskContainer.innerHTML = `<p class="text-xs text-slate-500 italic p-1">ไม่มีงานในวันนี้</p>`;
+            } else {
+                dayTasks.forEach(t => {
+                    const item = document.createElement('div');
+                    item.className = "bg-slate-900 p-2 rounded border border-slate-700 flex justify-between items-center gap-2 text-xs";
+                    item.innerHTML = `
+                        <span class="truncate font-medium flex-1 text-slate-200">${t.title}</span>
+                        <span class="text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">ดูเท่านั้น</span>
+                    `;
+                    taskContainer.appendChild(item);
+                });
+            }
+            document.getElementById('admin-action-modal').classList.remove('hidden');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-action-modal').classList.add('hidden');
+        }
+
+        function resetTaskForm() {
+            document.getElementById('form-action-title').innerText = "สร้างงานใหม่";
+            document.getElementById('edit-task-id').value = "";
+            document.getElementById('task-form').reset();
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('task-date-start').value = todayStr;
+            document.getElementById('task-date-end').value = todayStr;
+            document.getElementById('submit-btn').innerText = "บันทึกข้อมูล";
+            document.getElementById('cancel-edit-btn').classList.add('hidden');
+        }
+
+        function employeeManageStatus(event) {
+            document.getElementById('employee-modal-title').innerText = "อัปเดตสถานะงาน";
+            document.getElementById('employee-modal-title').className = "text-lg font-bold text-blue-400 mb-2";
+            
+            document.getElementById('employee-modal-task-id').value = event.id;
+            document.getElementById('employee-modal-task-title').innerText = event.title;
+            document.getElementById('employee-modal-task-desc').innerText = event.extendedProps.description || 'ไม่มีรายละเอียดงาน';
+            document.getElementById('employee-modal-status').value = event.extendedProps.status || 'pending';
+            
+            document.getElementById('employee-dropdown-block').classList.remove('hidden');
+            document.getElementById('employee-modal-save-btn').classList.remove('hidden');
+            document.getElementById('employee-modal-delete-btn').classList.remove('hidden');
+            
+            document.getElementById('employee-status-modal').classList.remove('hidden');
+        }
+
+        function closeEmployeeModal() {
+            document.getElementById('employee-status-modal').classList.add('hidden');
+        }
+
+        async function saveEmployeeStatus(e) {
+            e.preventDefault();
+            const taskId = document.getElementById('employee-modal-task-id').value;
+            const status = document.getElementById('employee-modal-status').value;
+
+            if (!taskId) return;
+
+            const res = await fetch(`/api/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+
+            if (res.ok) {
+                closeEmployeeModal();
+                loadTasks();
+            } else {
+                alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+            }
+        }
+
+        async function triggerEmployeeDelete() {
+            const taskId = document.getElementById('employee-modal-task-id').value;
+            if (!taskId) return;
+
+            if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบงานชิ้นนี้ออกจากระบบ?')) {
+                const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    closeEmployeeModal();
+                    loadTasks();
+                } else {
+                    alert('เกิดข้อผิดพลาด ไม่สามารถลบงานชิ้นนี้ได้');
+                }
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('main-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+    </script>
+</body>
+</html>
